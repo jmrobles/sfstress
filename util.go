@@ -26,7 +26,12 @@ func getConnStringSF() string {
 	password := getEnvDefault("SF_PASSWORD", "")
 	database := getEnvDefault("SF_DB", "")
 	warehouse := getEnvDefault("SF_WAREHOUSE", "")
-	return fmt.Sprintf("%s:%s@%s/%s?warehouse=%s", user, password, host, database, warehouse)
+	schema := getEnvDefault("SF_SCHEMA", "")
+	if schema == "" {
+		return fmt.Sprintf("%s:%s@%s/%s?warehouse=%s", user, password, host, database, warehouse)
+	}
+	return fmt.Sprintf("%s:%s@%s/%s/%s?warehouse=%s", user, password, host, database, schema, warehouse)
+
 }
 
 func getFilesInFolder(folder string) ([]string, error) {

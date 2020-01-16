@@ -9,7 +9,15 @@ import (
 	"path"
 	"time"
 
+	_ "github.com/denisenkom/go-mssqldb"
 	_ "github.com/snowflakedb/gosnowflake"
+)
+
+type sqlEngine int
+
+const (
+	sqlEngineSnowflake sqlEngine = iota
+	sqlEngineSQLServer
 )
 
 func getEnvDefault(name string, def string) string {
@@ -32,6 +40,15 @@ func getConnStringSF() string {
 	}
 	return fmt.Sprintf("%s:%s@%s/%s/%s?warehouse=%s", user, password, host, database, schema, warehouse)
 
+}
+
+func getConnStringSQLServer() string {
+	server := getEnvDefault("MSSQL_SERVER", "localhost")
+	port := getEnvDefault("MSSQL_PORT", "1433")
+	user := getEnvDefault("MSSQL_USER", "SA")
+	password := getEnvDefault("MSSQL_PASSWORD", "")
+	database := getEnvDefault("MSSQL_DB", "")
+	return fmt.Sprintf("server=%s;user id=%s;password=%s;port=%s;database=%s;", server, user, password, port, database)
 }
 
 func getFilesInFolder(folder string) ([]string, error) {
@@ -59,17 +76,37 @@ func getRandomSQLquery(basePath string, sqlFiles []string) (string, string, erro
 	return string(sql), rndFile, nil
 }
 
-func executeSQL(sqlQuery string) (time.Duration, error) {
+func executeSQL(sqlQuery string, mode sqlEngine) (time.Duration, error) {
 	// Get new connection
-	db, err := sql.Open("snowflake", getConnStringSF())
+	var connStr = ""
+	var engine = ""
+	if mode == sqlEngineSQLServer {
+		connStr = getConnStringSQLServer()
+		engine = "mssql"
+	} else {
+		connStr = getConnStringSF()
+		engine = "snowflake"
+	}
+	db, err := sql.Open(engine, connStr)
 	if err != nil {
 		return 0, err
 	}
 	defer db.Close()
 	// Change session to not use cached result
-	_, err = db.Exec("ALTER SESSION SET USE_CACHED_RESULT = False")
-	if err != nil {
-		return 0, err
+	if mode == sqlEngineSnowflake {
+		_, err = db.Exec("ALTER SESSION SET USE_CACHED_RESULT = False")
+		if err != nil {
+			return 0, err
+		}
+	} else {
+		_, err = db.Exec("DBCC DROPCLEANBUFFERS")
+		if err != nil {
+			return 0, err
+		}
+		_, err = db.Exec("DBCC FREEPROCCACHE")
+		if err != nil {
+			return 0, err
+		}
 	}
 	start := time.Now()
 	// Execute SQL

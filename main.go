@@ -17,6 +17,7 @@ type report struct {
 func main() {
 	log.Printf("Snowflake Stress Tool")
 	pathSQL := flag.String("pathSQL", "sql", "path where the SQL files to run are located")
+	backend := flag.String("backend", "snowflake", "database backend: snowflake or sqlserver")
 	duration := flag.Int("duration", 300, "duration in seconds of stress")
 	concurrent := flag.Int("concurrent", 50, "number of concurrent queries")
 	log.Printf("loading SQL queries from: \"%s\"", *pathSQL)
@@ -57,8 +58,13 @@ func main() {
 			reports = append(reports, packet)
 		}
 	}()
+	mode := sqlEngineSnowflake
+	if *backend == "sqlserver" {
+		mode = sqlEngineSQLServer
+	}
+
 	for i := 0; i < *concurrent; i++ {
-		go queryThread(i, quit, *pathSQL, sqls, resultsCh)
+		go queryThread(i, quit, *pathSQL, sqls, resultsCh, mode)
 		time.Sleep(1 * time.Second)
 	}
 	// Wait
@@ -69,7 +75,7 @@ func main() {
 
 }
 
-func queryThread(thNum int, quit chan interface{}, basePath string, sqls []string, resultCh chan report) {
+func queryThread(thNum int, quit chan interface{}, basePath string, sqls []string, resultCh chan report, backend sqlEngine) {
 	// log.Printf("[%04d] Thread start", thNum)
 	for {
 		select {
@@ -83,7 +89,7 @@ func queryThread(thNum int, quit chan interface{}, basePath string, sqls []strin
 				log.Printf("[%04d] can't load file. try again", thNum)
 			}
 			log.Printf("[%04d] Thread running SQL: %s", thNum, sqlFile)
-			duration, err := executeSQL(sql)
+			duration, err := executeSQL(sql, backend)
 			if err != nil {
 				log.Printf("[%04d] can't execute SQL: %s", thNum, err)
 				resultCh <- report{thID: thNum, duration: duration, hasError: true}

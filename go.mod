@@ -4,6 +4,7 @@ go 1.12
 
 require (
 	github.com/SermoDigital/jose v0.9.2-0.20180104203859-803625baeddc // indirect
+	github.com/denisenkom/go-mssqldb v0.0.0-20191128021309-1d7a30a10f73
 	github.com/google/uuid v1.1.1 // indirect
 	github.com/pkg/browser v0.0.0-20180916011732-0a3d74bf9ce4 // indirect
 	github.com/snowflakedb/gosnowflake v1.3.3

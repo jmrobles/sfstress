@@ -17,7 +17,7 @@ type report struct {
 func main() {
 	log.Printf("Snowflake Stress Tool")
 	pathSQL := flag.String("pathSQL", "sql", "path where the SQL files to run are located")
-	backend := flag.String("backend", "snowflake", "database backend: snowflake or sqlserver")
+	backend := flag.String("backend", "snowflake", "database backend: \"snowflake\", \"sqlserver\" or \"odbc\"")
 	duration := flag.Int("duration", 300, "duration in seconds of stress")
 	concurrent := flag.Int("concurrent", 50, "number of concurrent queries")
 	log.Printf("loading SQL queries from: \"%s\"", *pathSQL)
@@ -61,6 +61,8 @@ func main() {
 	mode := sqlEngineSnowflake
 	if *backend == "sqlserver" {
 		mode = sqlEngineSQLServer
+	} else if *backend == "odbc" {
+		mode = sqlEngineODBC
 	}
 
 	for i := 0; i < *concurrent; i++ {

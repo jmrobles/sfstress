@@ -9,6 +9,7 @@ import (
 	"path"
 	"time"
 
+	_ "github.com/alexbrainman/odbc"
 	_ "github.com/denisenkom/go-mssqldb"
 	_ "github.com/snowflakedb/gosnowflake"
 )
@@ -18,6 +19,7 @@ type sqlEngine int
 const (
 	sqlEngineSnowflake sqlEngine = iota
 	sqlEngineSQLServer
+	sqlEngineODBC
 )
 
 func getEnvDefault(name string, def string) string {
@@ -49,6 +51,13 @@ func getConnStringSQLServer() string {
 	password := getEnvDefault("MSSQL_PASSWORD", "")
 	database := getEnvDefault("MSSQL_DB", "")
 	return fmt.Sprintf("server=%s;user id=%s;password=%s;port=%s;database=%s;", server, user, password, port, database)
+}
+
+func getConnStringODBC() string {
+	dsn := getEnvDefault("ODBC_DSN", "")
+	password := getEnvDefault("ODBC_PASSWORD", "")
+	return fmt.Sprintf("DSN=%s;PWD=%s", dsn, password)
+	//return fmt.Sprintf("DRIVER={SnowflakeDSIIDriver};server=axesor.west-europe.azure.snowflakecomputing.com;database=STAGE_CO_DB;warehouse=TEST_WH;UID=CIVICA_POC;PWD=CIVI19ca_;AUTOCOMMIT=FALSE")
 }
 
 func getFilesInFolder(folder string) ([]string, error) {
@@ -83,9 +92,13 @@ func executeSQL(sqlQuery string, mode sqlEngine) (time.Duration, error) {
 	if mode == sqlEngineSQLServer {
 		connStr = getConnStringSQLServer()
 		engine = "mssql"
+	} else if mode == sqlEngineODBC {
+		connStr = getConnStringODBC()
+		engine = "odbc"
 	} else {
 		connStr = getConnStringSF()
 		engine = "snowflake"
+		// log.Printf("DSN : %s", connStr)
 	}
 	db, err := sql.Open(engine, connStr)
 	if err != nil {
@@ -93,12 +106,12 @@ func executeSQL(sqlQuery string, mode sqlEngine) (time.Duration, error) {
 	}
 	defer db.Close()
 	// Change session to not use cached result
-	if mode == sqlEngineSnowflake {
+	if mode == sqlEngineSnowflake || mode == sqlEngineODBC {
 		_, err = db.Exec("ALTER SESSION SET USE_CACHED_RESULT = False")
 		if err != nil {
 			return 0, err
 		}
-	} else {
+	} else if mode == sqlEngineSQLServer {
 		_, err = db.Exec("DBCC DROPCLEANBUFFERS")
 		if err != nil {
 			return 0, err

@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"log"
 	"os"
 	"sync"
@@ -15,12 +16,14 @@ type report struct {
 }
 
 func main() {
-	log.Printf("Snowflake Stress Tool")
+	// log.Printf("Snowflake Stress Tool")
+	mode := flag.String("mode", "stress", "\"stress\" or \"bulk\"")
+	bulkFile := flag.String("bulkFile", "", "bulk SQL file to use")
 	pathSQL := flag.String("pathSQL", "sql", "path where the SQL files to run are located")
 	backend := flag.String("backend", "snowflake", "database backend: \"snowflake\", \"sqlserver\" or \"odbc\"")
 	duration := flag.Int("duration", 300, "duration in seconds of stress")
 	concurrent := flag.Int("concurrent", 50, "number of concurrent queries")
-	log.Printf("loading SQL queries from: \"%s\"", *pathSQL)
+	// log.Printf("loading SQL queries from: \"%s\"", *pathSQL)
 	flag.Parse()
 	// Check if folder exists
 	if _, err := os.Stat(*pathSQL); os.IsNotExist(err) {
@@ -29,6 +32,19 @@ func main() {
 	if *duration < *concurrent {
 		log.Fatalf("Duration can't be less than concurrent: %d < %d", *duration, *concurrent)
 	}
+
+	backendSel := sqlEngineSnowflake
+	if *backend == "sqlserver" {
+		backendSel = sqlEngineSQLServer
+	} else if *backend == "odbc" {
+		backendSel = sqlEngineODBC
+	}
+	if *mode == "bulk" {
+
+		bulk(backendSel, *bulkFile)
+		return
+	}
+
 	quit := make(chan interface{})
 	wg := new(sync.WaitGroup)
 	wg.Add(1)
@@ -58,15 +74,9 @@ func main() {
 			reports = append(reports, packet)
 		}
 	}()
-	mode := sqlEngineSnowflake
-	if *backend == "sqlserver" {
-		mode = sqlEngineSQLServer
-	} else if *backend == "odbc" {
-		mode = sqlEngineODBC
-	}
 
 	for i := 0; i < *concurrent; i++ {
-		go queryThread(i, quit, *pathSQL, sqls, resultsCh, mode)
+		go queryThread(i, quit, *pathSQL, sqls, resultsCh, backendSel)
 		time.Sleep(1 * time.Second)
 	}
 	// Wait
@@ -128,4 +138,18 @@ func processResults(reports []report) {
 	log.Printf("*** Total test: %d", totalRuns)
 	avg := time.Duration(float32(totalTime) / float32(totalRuns))
 	log.Printf("*** Avg time per query: %s", avg)
+}
+
+func bulk(backend sqlEngine, pathSQL string) error {
+	sql, err := getSQLContent(pathSQL)
+	if err != nil {
+		log.Fatalf("Can't get SQL content")
+	}
+	durationQueries, durationTotal, err := executeSQLBulk(backend, sql)
+	if err != nil {
+		log.Fatalf("Can't execute SQL bulk: %s", err)
+	}
+	fmt.Printf("%.2f,%.2f,%.2f\n", durationTotal.Seconds()-durationQueries.Seconds(), durationQueries.Seconds(), durationTotal.Seconds())
+	return nil
+
 }

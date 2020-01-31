@@ -3,7 +3,6 @@ module github.com/jmrobles/sfstress
 go 1.12
 
 require (
-	bitbucket.org/miquella/mgodbc v0.0.0-20160201181728-2207dbb57608 // indirect
 	github.com/SermoDigital/jose v0.9.2-0.20180104203859-803625baeddc // indirect
 	github.com/alexbrainman/odbc v0.0.0-20190102080306-cf37ce290779
 	github.com/denisenkom/go-mssqldb v0.0.0-20191128021309-1d7a30a10f73

@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"os"
 	"path"
+	"strings"
 	"time"
 
 	_ "github.com/alexbrainman/odbc"
@@ -85,6 +86,14 @@ func getRandomSQLquery(basePath string, sqlFiles []string) (string, string, erro
 	return string(sql), rndFile, nil
 }
 
+func getSQLContent(basePath string) (string, error) {
+	sql, err := ioutil.ReadFile(basePath)
+	if err != nil {
+		return "", err
+	}
+	return string(sql), nil
+}
+
 func executeSQL(sqlQuery string, mode sqlEngine) (time.Duration, error) {
 	// Get new connection
 	var connStr = ""
@@ -131,6 +140,71 @@ func executeSQL(sqlQuery string, mode sqlEngine) (time.Duration, error) {
 	rows.Close()
 	// Close connection
 	return time.Since(start), nil
+}
+
+func executeSQLBulk(mode sqlEngine, sqlQuery string) (time.Duration, time.Duration, error) {
+	// Get new connection
+	var connStr = ""
+	var engine = ""
+	if mode == sqlEngineSQLServer {
+		connStr = getConnStringSQLServer()
+		engine = "mssql"
+	} else if mode == sqlEngineODBC {
+		connStr = getConnStringODBC()
+		engine = "odbc"
+	} else {
+		connStr = getConnStringSF()
+		engine = "snowflake"
+		// log.Printf("DSN : %s", connStr)
+	}
+	db, err := sql.Open(engine, connStr)
+	if err != nil {
+		return 0, 0, err
+	}
+	defer db.Close()
+	// Change session to not use cached result
+	if mode == sqlEngineSnowflake || mode == sqlEngineODBC {
+		_, err = db.Exec("ALTER SESSION SET USE_CACHED_RESULT = False")
+		if err != nil {
+			return 0, 0, err
+		}
+	} else if mode == sqlEngineSQLServer {
+		/*
+			_, err = db.Exec("DBCC DROPCLEANBUFFERS")
+			if err != nil {
+				return 0, 0, err
+			}
+			_, err = db.Exec("DBCC FREEPROCCACHE")
+			if err != nil {
+				return 0, 0, err
+			}
+		*/
+	}
+	start := time.Now()
+	// Execute SQL
+	cleanSQL := strings.TrimSpace(sqlQuery)
+	// log.Printf("*** Starting MSSQL query: %s", cleanSQL)
+	sqlParts := strings.Split(cleanSQL, ";")
+	var queriesDuration time.Duration
+	for _, sqlPart := range sqlParts {
+		if strings.TrimSpace(sqlPart) == "" {
+			continue
+		}
+		rows, err := db.Query(sqlQuery)
+		if err != nil {
+			return 0, 0, err
+		}
+		fetchStart := time.Now()
+		for rows.Next() {
+			// Dummy
+		}
+		queriesDuration += time.Since(fetchStart)
+
+	}
+	// Ignore rows
+	// rows.Close()
+	// Close connection
+	return queriesDuration, time.Since(start), nil
 }
 
 func init() {

@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/joho/sqltocsv"
+
 	_ "github.com/alexbrainman/odbc"
 	_ "github.com/denisenkom/go-mssqldb"
 	_ "github.com/snowflakedb/gosnowflake"
@@ -142,7 +144,7 @@ func executeSQL(sqlQuery string, mode sqlEngine) (time.Duration, error) {
 	return time.Since(start), nil
 }
 
-func executeSQLBulk(mode sqlEngine, sqlQuery string) (time.Duration, time.Duration, error) {
+func executeSQLBulk(mode sqlEngine, sqlQuery string) (time.Duration, time.Duration, int, error) {
 	// Get new connection
 	var connStr = ""
 	var engine = ""
@@ -159,14 +161,14 @@ func executeSQLBulk(mode sqlEngine, sqlQuery string) (time.Duration, time.Durati
 	}
 	db, err := sql.Open(engine, connStr)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, 0, err
 	}
 	defer db.Close()
 	// Change session to not use cached result
 	if mode == sqlEngineSnowflake || mode == sqlEngineODBC {
 		_, err = db.Exec("ALTER SESSION SET USE_CACHED_RESULT = False")
 		if err != nil {
-			return 0, 0, err
+			return 0, 0, 0, err
 		}
 	} else if mode == sqlEngineSQLServer {
 		/*
@@ -186,25 +188,36 @@ func executeSQLBulk(mode sqlEngine, sqlQuery string) (time.Duration, time.Durati
 	// log.Printf("*** Starting MSSQL query: %s", cleanSQL)
 	sqlParts := strings.Split(cleanSQL, ";")
 	var queriesDuration time.Duration
+	nRows := 0
 	for _, sqlPart := range sqlParts {
 		if strings.TrimSpace(sqlPart) == "" {
 			continue
 		}
 		rows, err := db.Query(sqlQuery)
 		if err != nil {
-			return 0, 0, err
+			return 0, 0, 0, err
 		}
 		fetchStart := time.Now()
-		for rows.Next() {
-			// Dummy
+		/*
+			for rows.Next() {
+				// Dummy
+				nRows++
+			}*/
+		sqltocsv.WriteFile("tmp.csv", rows)
+		fi, err := os.Stat("tmp.csv")
+		if err != nil {
+			return 0, 0, 0, err
 		}
+		// get the size
+		size := fi.Size()
+		fmt.Printf("Size: %d\n", size)
 		queriesDuration += time.Since(fetchStart)
 
 	}
 	// Ignore rows
 	// rows.Close()
 	// Close connection
-	return queriesDuration, time.Since(start), nil
+	return queriesDuration, time.Since(start), nRows, nil
 }
 
 func init() {

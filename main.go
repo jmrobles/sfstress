@@ -145,11 +145,11 @@ func bulk(backend sqlEngine, pathSQL string) error {
 	if err != nil {
 		log.Fatalf("Can't get SQL content")
 	}
-	durationQueries, durationTotal, err := executeSQLBulk(backend, sql)
+	durationQueries, durationTotal, rows, err := executeSQLBulk(backend, sql)
 	if err != nil {
 		log.Fatalf("Can't execute SQL bulk: %s", err)
 	}
-	fmt.Printf("%.2f,%.2f,%.2f\n", durationTotal.Seconds()-durationQueries.Seconds(), durationQueries.Seconds(), durationTotal.Seconds())
+	fmt.Printf("%.2f,%.2f,%.2f,%d\n", durationTotal.Seconds()-durationQueries.Seconds(), durationQueries.Seconds(), durationTotal.Seconds(), rows)
 	return nil
 
 }
